@@ -11,7 +11,7 @@ def naive(returns: pd.Series, window: int = 5) -> pd.Series:
     past_var = (returns ** 2).rolling(window).mean()  # average squared return over the past window
     return np.sqrt(past_var)
 def rolling(returns: pd.Series, window: int = 22) -> pd.Series:
-    '''naive with a larger window'''
+    '''naive with a larger window, looking at the past-month'''
     past_var = (returns ** 2).rolling(window).mean()  # average squared return over the past window
     return np.sqrt(past_var)
 

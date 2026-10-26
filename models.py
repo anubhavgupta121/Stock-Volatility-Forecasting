@@ -2,6 +2,8 @@ import statsmodels.api as sm
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
+import metrics
 
 def HAR(train : pd.DataFrame, cal : pd.DataFrame) -> pd.Series:
 
@@ -49,6 +51,76 @@ def random_forest(train: pd.DataFrame, val: pd.DataFrame, cols: list, leaf: int 
 
     preds = model.predict(X_val)                 
     return pd.Series(preds, index=X_val.index)  
+    
+def XGBOOST(train: pd.DataFrame, val: pd.DataFrame, cols: list,
+            depth: int, lr: float, n: int = 2000, es_frac: float = 0.15) -> pd.Series:
+    # carve the LAST part of training (by date) as the early-stopping set
+    cut = int(len(train) * (1 - es_frac))
+    fit_part, es_part = train.iloc[:cut], train.iloc[cut:]
+
+    # QLIKE as the stopping metric (XGBoost passes plain numpy arrays)
+    def qlike_metric(y_true, y_pred):
+        y_pred = np.clip(y_pred, 1e-8, None)   # early trees can dip to <= 0
+        return metrics.QLIKE(pd.Series(y_pred), pd.Series(y_true))
+
+    model = XGBRegressor(
+        n_estimators=n,              # just a ceiling now
+        max_depth=depth,
+        learning_rate=lr,
+        early_stopping_rounds=50,    # stop after 50 trees with no improvement in teh carved-out validation set from the otignal training set.
+        eval_metric=qlike_metric,
+        random_state=42,
+    )
+    model.fit(
+        fit_part[cols], fit_part["target"],
+        eval_set=[(es_part[cols], es_part["target"])],
+        verbose=False,
+    )
+    print(f"stopped at tree {model.best_iteration}")
+
+    preds = model.predict(val[cols])   # uses the best iteration automatically
+    return pd.Series(preds, index=val.index)
+
+def XG_obj(y_act : pd.Series,  z : pd.Series) :
+    lo = np.exp(-z)
+    grad = 1 - y_act*(lo)
+    hess = y_act*lo
+
+    return grad,hess
+
+
+def XGBOOST_QLIKE(train: pd.DataFrame, val: pd.DataFrame, cols: list,
+            depth: int, lr: float, n: int = 2000, es_frac: float = 0.15) -> pd.Series:
+    # carve the LAST part of training (by date) as the early-stopping set
+    cut = int(len(train) * (1 - es_frac))
+    fit_part, es_part = train.iloc[:cut], train.iloc[cut:]
+
+    # QLIKE as the stopping metric (XGBoost passes plain numpy arrays)
+    def qlike_metric(y_true, z):
+        y_pred_vol = np.sqrt(np.exp(z))
+        y_true_vol = np.sqrt(y_true)
+        return metrics.QLIKE(pd.Series(y_pred_vol), pd.Series(y_true_vol))
+
+    model = XGBRegressor(
+        n_estimators=n,              # just a ceiling now
+        max_depth=depth,
+        learning_rate=lr,
+        objective=XG_obj,
+        base_score = np.log((fit_part["target"]**2).mean()),
+        early_stopping_rounds=50,    # stop after 50 trees with no improvement in teh carved-out validation set from the otignal training set.
+        eval_metric=qlike_metric,
+        random_state=42,
+    )
+    model.fit(
+        fit_part[cols], fit_part["target"]**2,
+        eval_set=[(es_part[cols], es_part["target"]**2)],  ##here now we are preidcting varience, not volatility so that we can ffed it into QLIKE
+        verbose=False,
+        
+    )
+    print(f"stopped at tree {model.best_iteration}")
+
+    preds = np.sqrt(np.exp(model.predict(val[cols])))   # uses the best iteration automatically
+    return pd.Series(preds, index=val.index)
     
     
 

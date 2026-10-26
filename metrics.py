@@ -11,6 +11,5 @@ def RMSE(pred: pd.Series, actual: pd.Series) -> float:
 def QLIKE(pred: pd.Series, actual: pd.Series) -> float:
     both = pd.concat([pred, actual], axis=1, join="inner").dropna()  # matching dates, no missing values
     assert (both.iloc[:, 0] > 0).all(), "predictions must be positive"
-    both.plot()
     ratio = (both.iloc[:, 1] / both.iloc[:, 0]) ** 2  # actual variance / predicted variance
     return float((ratio - np.log(ratio) - 1).mean())

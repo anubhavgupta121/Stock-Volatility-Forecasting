@@ -32,3 +32,12 @@ def garch(returns: pd.Series, cutoff: str) -> pd.Series:
     fc = res.forecast(horizon=5, start=cutoff, reindex=False)  # 5 daily variances per date
     daily_var = fc.variance / 100**2                          # undo the scaling
     return np.sqrt(daily_var.mean(axis=1))  
+
+def garch_variance(returns: pd.Series, cutoff: str) -> pd.Series:
+    """GARCH(1,1) forecast of next-week average daily VARIANCE, for every date.
+    Coefficients are still fitted only on data before `cutoff`."""
+    r100 = returns * 100
+    model = arch_model(r100, mean="Zero", vol="GARCH", p=1, q=1)
+    res = model.fit(last_obs=cutoff, disp="off")
+    fc = res.forecast(horizon=5, start=0, reindex=False)   # every date, not just from cutoff
+    return (fc.variance / 100**2).mean(axis=1)             # variance: no sqrt

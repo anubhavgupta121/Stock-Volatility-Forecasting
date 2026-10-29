@@ -5,13 +5,13 @@ from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 import metrics
 
-def HAR(train : pd.DataFrame, cal : pd.DataFrame) -> pd.Series:
+def HAR(train : pd.DataFrame, cal : pd.DataFrame, cols : list) -> pd.Series:
 
-    X = train[["today_vol", "past_5_days", "past_22_days"]] #HAR is defined only for these columns
+    X = train[cols] #HAR is defined only for these columns
     y = train["target"]
     X_c = sm.add_constant(X)
 
-    X_pred = cal[["today_vol", "past_5_days", "past_22_days"]]
+    X_pred = cal[cols]
     X_pred = sm.add_constant(X_pred)
 
     model = sm.OLS(y,X_c)
@@ -98,7 +98,7 @@ def XGBOOST_QLIKE(train: pd.DataFrame, val: pd.DataFrame, cols: list,
     # QLIKE as the stopping metric (XGBoost passes plain numpy arrays)
     def qlike_metric(y_true, z):
         y_pred_vol = np.sqrt(np.exp(z))
-        y_true_vol = np.sqrt(y_true)
+        y_true_vol = np.sqrt(y_true)  #converting back to volatilities
         return metrics.QLIKE(pd.Series(y_pred_vol), pd.Series(y_true_vol))
 
     model = XGBRegressor(
@@ -113,7 +113,7 @@ def XGBOOST_QLIKE(train: pd.DataFrame, val: pd.DataFrame, cols: list,
     )
     model.fit(
         fit_part[cols], fit_part["target"]**2,
-        eval_set=[(es_part[cols], es_part["target"]**2)],  ##here now we are preidcting varience, not volatility so that we can ffed it into QLIKE
+        eval_set=[(es_part[cols], es_part["target"]**2)],  ##here now we are preidcting varience, not volatility so that we can feed it into QLIKE
         verbose=False,
         
     )
@@ -121,7 +121,33 @@ def XGBOOST_QLIKE(train: pd.DataFrame, val: pd.DataFrame, cols: list,
 
     preds = np.sqrt(np.exp(model.predict(val[cols])))   # uses the best iteration automatically
     return pd.Series(preds, index=val.index)
-    
+
+def XGBOOST_HYBRID(train, val, cols, depth, lr, garch_var_train, garch_var_val,
+                   n=2000, es_frac=0.15):
+    cut = int(len(train) * (1 - es_frac))
+    fit_part, es_part = train.iloc[:cut], train.iloc[cut:]
+
+    # each day's starting point = log of GARCH's variance forecast
+    m_fit = np.log(garch_var_train.loc[fit_part.index])
+    m_es  = np.log(garch_var_train.loc[es_part.index])
+    m_val = np.log(garch_var_val.loc[val.index])
+
+    def qlike_metric(y_true, z):
+        return metrics.QLIKE(pd.Series(np.sqrt(np.exp(z))), pd.Series(np.sqrt(y_true)))
+
+    model = XGBRegressor(
+        n_estimators=n, max_depth=depth, learning_rate=lr,
+        objective=XG_obj,                 # unchanged
+        early_stopping_rounds=50, eval_metric=qlike_metric, random_state=42,
+    )                                     # no base_score: base_margin replaces it
+    model.fit(
+        fit_part[cols], fit_part["target"] ** 2, base_margin=m_fit,
+        eval_set=[(es_part[cols], es_part["target"] ** 2)], base_margin_eval_set=[m_es],
+        verbose=False,
+    )
+    print(f"stopped at tree {model.best_iteration}")
+    z = model.predict(val[cols], base_margin=m_val)   # includes the GARCH start
+    return pd.Series(np.sqrt(np.exp(z)), index=val.index)
     
 
     

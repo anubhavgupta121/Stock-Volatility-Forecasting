@@ -93,7 +93,7 @@
     <div class="eq"><span>target(<i>t</i>) = √( mean( <i>r</i>²<sub><i>t</i>+1</sub>, …, <i>r</i>²<sub><i>t</i>+5</sub> ) )</span></div>
     <p><strong>Why not <code>.std()</code>?</strong> It subtracts the window's own average first, which hides steady trends. A week of +1% every day has a <code>.std()</code> of 0% but a volatility of 1%; a week of +2, +1, +3, +2, +2% gives 0.7% and 2.1%. The S&amp;P's true average daily return is a few hundredths of a percent, so assuming zero costs almost nothing.</p>
     <p><strong>One row per day, overlapping targets.</strong> Neighbouring rows share 4 of their 5 target days. That keeps a forecast every day (about 9,200 rows instead of about 1,840 weekly ones), at the cost of rows that are not independent, which the evaluation has to respect.<sup class="sn">3</sup></p>
-    <p><strong>Five training days removed.</strong> On five days in 1990–2018 the S&amp;P 500 closed at exactly the previous day's close, so <code>today_vol</code> = |<i>r</i>| is 0. Log-HAR (§4.3) takes the log of every input, and log(0) has no value, so these five rows were dropped from the training set (notebook cell 13). That is five rows out of about 7,300; the validation and test years were not touched.</p>
+    <p><strong>Five training days removed.</strong> On five days in 1990–2018 the S&amp;P 500 closed at exactly the previous day's close, so <code>today_vol</code> = |<i>r</i>| is 0. Log-HAR (§4.3) takes the log of every input, and log(0) has no value, so these five rows were dropped from the training set (in the notebook's split cell). That is five rows out of about 7,300; the validation and test years were not touched.</p>
   </div>
   <aside class="side note"><span class="k">3</span><b>Checked by hand.</b> The target on 1 February 1990 (0.007086) equals the past-5-day value on 8 February, as it should. In code: <code>rolling(5)</code> mean of <i>r</i>², square root, then <code>shift(−5)</code>.</aside>
   <div class="main">
@@ -438,7 +438,7 @@
   <div class="main">
     <p>Code: <a href="https://github.com/anubhavgupta121/Stock-Volatility-Forecasting">github.com/anubhavgupta121/Stock-Volatility-Forecasting</a>. Data is downloaded by the code, so nothing private or licensed is stored in the repository.</p>
     <ol class="steps">
-      <li>Clone the repository and install the libraries: <code>pip install yfinance pandas numpy statsmodels scikit-learn xgboost arch matplotlib</code>.</li>
+      <li>Clone the repository and install the pinned libraries (Python 3.13): <code>pip install -r requirements.txt</code>.</li>
       <li>Open <code>notebooks/checks.ipynb</code> and run the cells in order. It downloads <code>^GSPC</code> and <code>^VIX</code>, builds the features (<code>features.py</code>), and runs the baselines (<code>baselines.py</code>), models (<code>models.py</code>) and metrics (<code>metrics.py</code>).</li>
       <li>Fixed choices: split by year (train 1990–2018, validation 2019–2022, test 2023–), <code>random_state=42</code>, GARCH fitted on data before each cutoff only.</li>
       <li>The forecasts behind this page are in <a href="data/test_predictions.csv"><code>data/test_predictions.csv</code></a> (test, every model) and <a href="data/val_predictions.csv"><code>data/val_predictions.csv</code></a> (validation, GARCH and XGBoost-QLIKE without and with VIX).</li>
@@ -450,7 +450,7 @@
 <section id="ai-use">
   <h2 class="main sec"><span class="n"></span>AI use and references</h2>
   <div class="main">
-    <p><strong>AI use:</strong> Claude (Anthropic) was used to explain methods, give suggestions, debug code (for example early stopping, the GARCH-anchored hybrid and the final formatted test cell in the notebook), review results, and build this website. The experiments, modelling choices and interpretations are all mine, and every number comes from the project's notebook or is computed from the forecasts it exports.</p>
+    <p><strong>AI use:</strong> Claude (Anthropic) was used to explain methods, give suggestions, debug code (for example early stopping, the GARCH-anchored hybrid and the final formatted test cell in the notebook), review results, build this website, and, after a review, write the check cells at the end of the notebook, <code>requirements.txt</code> and <code>.gitignore</code>. The original experiments, modelling choices and interpretations are all mine, and every number comes from the project's notebook or is computed from the forecasts it exports.</p>
     <ol class="refs">
       <li>Corsi (2009), <i>A Simple Long Memory Model of Realized Volatility</i>: the HAR model.</li>
       <li>Engle, <a href="https://www.stern.nyu.edu/rengle/GARCH101.PDF">GARCH 101</a>: an introduction to GARCH.</li>

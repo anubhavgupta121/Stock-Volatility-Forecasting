@@ -1,0 +1,678 @@
+<title>Forecasting Next-Week S&amp;P 500 Volatility</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="ES 335 project: do machine-learning models forecast next-week S&amp;P 500 volatility better than GARCH on unseen 2023–2026 data?">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;0,700;1,400&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Chart-led version: big numbered section openers with a one-line takeaway, full-bleed chart panels, shaded result tables.
+   Layout: a journal article. A ~660px text column with a right margin for numbered notes; figures and wide tables span both columns; one full-width volatility chart opens the page. */
+:root {
+  --bg: #fcfcfb; --panel: #f3f3f1; --ink: #16181d; --ink-2: #464b57; --ink-3: #6f7480; --rule: #d9dbe0; --grid: #ececee; --axis: #a3a7b0;
+  --accent: #a3142c; --test-shade: #f0f1f4;
+  --heat0: #f6e4c6; --heat1: #eda45c; --heat2: #c4361f;
+  --band-train: #e8e9ed; --band-val: #cdd6e6; --band-test: #16181d; --band-test-ink: #fcfcfb;
+  --kept: #1f7a45; --rej: #a3142c; --ref: #5b616d; --fin: #1d5bb8;
+  --s1: #1d5bb8; --s2: #d0661c; --s3: #1a9e6f; --s4: #d99a00; --s5: #e070a0; --s6: #2f7d32; --s7: #6250d6; --s8: #e34948; --s9: #8b929c;
+  --serif: "STIX Two Text", "Times New Roman", Times, serif;
+  --sans: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --cols: minmax(0, 660px) minmax(0, 1fr); --gap: 48px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121418; --panel: #1a1d22; --ink: #e9e8e5; --ink-2: #babdc6; --ink-3: #8d929d; --rule: #2d3139; --grid: #22252b; --axis: #5a5f6a;
+    --accent: #ff7389; --test-shade: #181b20; --heat0: #3a2a1a; --heat1: #b8692c; --heat2: #ff6a45;
+    --band-train: #23262c; --band-val: #2f3a4c; --band-test: #e9e8e5; --band-test-ink: #121418;
+    --kept: #4cc183; --rej: #ff7389; --ref: #a3a8b3; --fin: #73a3f5;
+    --s1: #6a9cf2; --s2: #ec8a43; --s3: #36c08e; --s4: #e7b234; --s5: #ec8fb8; --s6: #5fb562; --s7: #9a8cf0; --s8: #f07070; --s9: #8b929c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121418; --panel: #1a1d22; --ink: #e9e8e5; --ink-2: #babdc6; --ink-3: #8d929d; --rule: #2d3139; --grid: #22252b; --axis: #5a5f6a;
+  --accent: #ff7389; --test-shade: #181b20; --heat0: #3a2a1a; --heat1: #b8692c; --heat2: #ff6a45;
+  --band-train: #23262c; --band-val: #2f3a4c; --band-test: #e9e8e5; --band-test-ink: #121418;
+  --kept: #4cc183; --rej: #ff7389; --ref: #a3a8b3; --fin: #73a3f5;
+  --s1: #6a9cf2; --s2: #ec8a43; --s3: #36c08e; --s4: #e7b234; --s5: #ec8fb8; --s6: #5fb562; --s7: #9a8cf0; --s8: #f07070; --s9: #8b929c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 56px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 19px/1.58 var(--serif); font-variant-numeric: lining-nums;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.8em; background: var(--panel); padding: 1px 4px; border-radius: 2px; }
+p { margin: 0 0 14px; }
+b, strong { font-weight: 600; }
+
+/* Section bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-bottom: 1px solid var(--rule);
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.bar-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+.bar nav { flex: 1; min-width: 0; display: flex; gap: 4px 16px; overflow-x: auto; padding-block: 9px; scrollbar-width: none; font: 500 13px/1.3 var(--sans); }
+.bar nav::-webkit-scrollbar { display: none; }
+.bar a { color: var(--ink-2); text-decoration: none; white-space: nowrap; }
+.bar a span { color: var(--accent); margin-right: 4px; }
+.bar a:hover { color: var(--ink); }
+.theme-btn { flex: none; font: 500 12.5px/1 var(--sans); color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; padding: 6px 11px; cursor: pointer; }
+.theme-btn:hover { border-color: var(--ink-3); }
+.bar a.brand { color: var(--ink); font-weight: 600; margin-right: 8px; }
+
+/* Article grid */
+main.paper { max-width: 1080px; margin: 0 auto; padding-block: 44px 40px; display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); counter-reset: fig tab; }
+main.paper > section { grid-column: 1 / -1; display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); align-items: start; padding-top: 18px; }
+.main { grid-column: 1; min-width: 0; }
+.side { grid-column: 2; min-width: 0; }
+.full, .wide { grid-column: 1 / -1; min-width: 0; }
+
+/* Title block */
+.titleblock { padding-bottom: 20px; }
+.venue { font: 500 12.5px/1.4 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+h1 { font: 600 clamp(34px, 5vw, 48px)/1.08 var(--serif); letter-spacing: -0.012em; margin: 12px 0 14px; max-width: 20ch; text-wrap: balance; }
+.byline { font: 400 14.5px/1.5 var(--sans); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 20px; padding-bottom: 18px; border-bottom: 1px solid var(--rule); }
+.byline b { color: var(--ink); }
+figure { margin: 0; }
+figure.hero { margin-bottom: 18px; }
+.hero-legend, .legend { font: 400 12.5px/1.4 var(--sans); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 16px; margin-bottom: 4px; }
+.hero-legend i, .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.hero-legend i.area { height: 10px; border: 0; background: linear-gradient(90deg, var(--heat0), var(--heat1), var(--heat2)); }
+
+/* Abstract and findings */
+h2.sc { font: 600 15px/1.2 var(--serif); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.08em; color: var(--ink-2); margin: 0 0 8px; }
+.abstract p { text-align: justify; hyphens: auto; }
+.findings ol { margin: 0; padding-left: 1.3em; display: grid; gap: 10px; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
+.findings li::marker { color: var(--accent); font-weight: 600; }
+.findings li b { color: var(--ink); }
+.findings a { font: 500 12px/1 var(--sans); white-space: nowrap; }
+
+/* Headings */
+h2.sec { font: 600 29px/1.2 var(--serif); letter-spacing: -0.01em; margin: 28px 0 4px; text-wrap: balance; }
+h2.sec .n, h3.sub .n { color: var(--accent); font-variant-numeric: lining-nums tabular-nums; }
+h2.sec .n { display: inline-block; min-width: 1.6em; }
+h3.sub { font: 600 21px/1.25 var(--serif); margin: 26px 0 8px; text-wrap: balance; }
+h3.sub .n { margin-right: 12px; }
+.dek { font-style: italic; font-size: 20px; color: var(--ink-2); margin-bottom: 18px; }
+sup.sn { color: var(--accent); font: 600 0.62em/0 var(--sans); margin-left: 1px; }
+
+/* Margin notes */
+.side.note { font-size: 15px; line-height: 1.5; color: var(--ink-2); padding-top: 6px; }
+.side.note .k { color: var(--accent); font: 600 12px/1 var(--sans); margin-right: 6px; }
+.side.note b { color: var(--ink); }
+
+/* Tables: booktabs rules */
+table.bk { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.4; font-variant-numeric: lining-nums tabular-nums;
+  border-top: 1.6px solid var(--ink); border-bottom: 1.6px solid var(--ink); margin-top: 6px; }
+table.bk.narrow { width: auto; min-width: min(100%, 320px); }
+table.bk th { font-weight: 600; text-align: right; padding: 7px 10px 5px; border-bottom: 0.8px solid var(--ink); vertical-align: bottom; }
+table.bk td { text-align: right; padding: 4px 10px; vertical-align: top; }
+table.bk th:first-child, table.bk td:first-child { text-align: left; padding-left: 0; }
+table.bk th:last-child, table.bk td:last-child { padding-right: 0; }
+table.bk .l { text-align: left; }
+table.bk tr.best td, table.bk td.b { font-weight: 700; }
+table.bk tr.off td { color: var(--ink-3); }
+.table-scroll { overflow-x: auto; }
+.sw { display: inline-block; width: 9px; height: 9px; margin-right: 8px; vertical-align: 1px; }
+.cap { font-size: 15px; line-height: 1.45; color: var(--ink-2); margin: 8px 0 22px; }
+.cap.fig::before { counter-increment: fig; content: "Figure " counter(fig) ". "; font-weight: 600; color: var(--ink); }
+.cap.tab::before { counter-increment: tab; content: "Table " counter(tab) ". "; font-weight: 600; color: var(--ink); }
+.tag { display: inline-block; font: 600 10.5px/1 var(--sans); letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 5px 2px; border: 1.4px solid currentColor; border-radius: 2px; margin-right: 6px; vertical-align: 2px; white-space: nowrap; }
+.tag.kept { color: var(--kept); } .tag.rej { color: var(--rej); } .tag.ref { color: var(--ref); } .tag.fin { color: var(--fin); }
+h3 .tag { margin-left: 10px; }
+table.log td { padding-block: 6px; }
+table.log { min-width: 640px; }
+
+/* Equations and key result */
+.eq { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 36px; font-size: 20px; margin: 6px 0 14px; padding-block: 4px; overflow-x: auto; }
+.eqnote { font-size: 15px; color: var(--ink-2); text-align: center; margin-top: -6px; }
+.keybox { background: var(--panel); padding: 16px 18px 4px; margin: 10px 0 18px; }
+
+/* Split figure */
+.split { display: flex; height: 34px; overflow: hidden; font: 400 12.5px/1 var(--sans); margin-top: 14px; }
+.split div { display: flex; align-items: center; gap: 6px; padding: 0 10px; white-space: nowrap; overflow: hidden; }
+.split .tr { background: var(--band-train); color: var(--ink); } .split .va { background: var(--band-val); color: var(--ink); } .split .te { background: var(--band-test); color: var(--band-test-ink); }
+
+/* Interactive figures */
+figure.explorer { border-top: 1.6px solid var(--ink); padding-top: 12px; display: grid; gap: 10px; margin-top: 10px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.grp { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.glab { font: 600 11px/1 var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); margin-right: 4px; }
+.chip { font: 500 13px/1 var(--sans); color: var(--ink-2); background: var(--bg); border: 1px solid var(--rule); border-radius: 2px; padding: 7px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.chip:hover { border-color: var(--ink-3); color: var(--ink); }
+.chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); background: var(--panel); font-weight: 600; }
+.chip .dot { width: 12px; height: 3px; }
+.chip[aria-pressed="false"] .dot { opacity: 0.3; }
+.range-label { font: 400 13px/1.3 var(--sans); color: var(--ink-2); }
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.axis text { font-family: var(--sans); font-size: 11px; fill: var(--ink-3); }
+.axis path, .axis line { stroke: var(--axis); }
+.gridline line { stroke: var(--grid); }
+.gridline path { display: none; }
+.tip { position: absolute; pointer-events: none; background: var(--bg); border: 1px solid var(--ink-3); padding: 8px 10px; font: 400 12.5px/1.5 var(--sans); min-width: 200px; z-index: 3; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); }
+.tip .d { font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.tip .row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
+.tip .row b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ctx-hint { font: 400 12.5px/1.4 var(--sans); color: var(--ink-3); }
+.brush .selection { fill: var(--accent); fill-opacity: 0.12; stroke: var(--accent); }
+.vix-note { font-size: 17px; color: var(--ink-2); max-width: 70ch; margin: 2px 0 0; }
+.share { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.share .shb { display: inline-block; height: 8px; flex: none; background: var(--s1); }
+
+/* Bar figures */
+.bars { display: grid; gap: 7px; margin-top: 8px; }
+.brow { display: grid; grid-template-columns: minmax(150px, 250px) 1fr; gap: 12px; align-items: center; }
+.brow .lab { display: grid; line-height: 1.25; font-family: var(--sans); }
+.brow .lab b { font-weight: 500; font-size: 14px; color: var(--ink); }
+.brow .lab span { font-size: 12.5px; color: var(--ink-3); }
+.track { position: relative; height: 20px; }
+.fill { position: absolute; left: 0; top: 4px; height: 12px; background: var(--s9); opacity: 0.5; }
+.fill.hi { background: var(--s1); opacity: 1; }
+.track .val { position: absolute; top: 1px; z-index: 1; background: var(--bg); padding: 0 3px; margin-left: -3px; font: 400 12.5px/18px var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.track .val.bv { font-weight: 700; }
+.bk.nw1 td:first-child, .bk.nw1 th:last-child { white-space: nowrap; }
+#val-bars .note { margin: 14px 0 0; font: 400 13.5px/1.4 var(--sans); color: var(--ink-2); }
+.refline { position: absolute; top: -4px; bottom: -4px; border-left: 1.5px dashed var(--ink-3); }
+.rgrp { display: grid; gap: 4px; margin-bottom: 10px; }
+.rlab { font: 600 11px/1.3 var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.rgrp .brow .lab span { font-size: 13.5px; color: var(--ink-2); }
+
+/* Episodes */
+.episodes { display: grid; margin: 4px 0 10px; border-bottom: 1px solid var(--rule); }
+.ep { display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--rule); padding: 10px 0; cursor: pointer; font: inherit; color: inherit; }
+.ep .t { font-weight: 600; }
+.ep:hover .t { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.ep .m { font: 400 13px/1.6 var(--sans); color: var(--ink-3); text-align: right; }
+.ep .n { grid-column: 1 / -1; font-size: 15.5px; line-height: 1.45; color: var(--ink-2); }
+
+/* Lists */
+ul.lims, ol.steps, ol.refs { margin: 0 0 14px; padding-left: 1.2em; display: grid; gap: 8px; }
+ol.refs { font-size: 16px; }
+footer { max-width: 1080px; margin: 0 auto; padding-block: 24px 56px; border-top: 1px solid var(--rule); font: 400 13.5px/1.5 var(--sans); color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  :root { --cols: minmax(0, 1fr); --gap: 0px; }
+  .side { grid-column: 1; }
+  .side.note, .side.findings { border-left: 2px solid var(--rule); padding: 4px 0 4px 14px; margin: 2px 0 20px; }
+  body { font-size: 18px; }
+}
+@media (max-width: 560px) {
+  table.bk { font-size: 14.5px; }
+  table.bk th, table.bk td { padding-left: 6px; padding-right: 6px; }
+  .brow { grid-template-columns: 1fr; gap: 2px; }
+  h2.sec { font-size: 25px; }
+  .split { flex-direction: column; height: auto; font-size: 12px; }
+  .split div { flex: none !important; height: 28px; }
+  .abstract p { text-align: left; hyphens: manual; }
+}
+/* Chart-led layer */
+.cover { grid-column: 1 / -1; display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); min-width: 0;
+  --bg: #0e1013; --panel: #171a1f; --ink: #eeece8; --ink-2: #bcbfc8; --ink-3: #8c919c; --rule: #2a2e36; --grid: #1e2127; --axis: #4f5560;
+  --accent: #ff8196; --test-shade: #15181d; --heat0: #3d2a18; --heat1: #c56d2b; --heat2: #ff6a45; --s1: #7aa8f7;
+  color: var(--ink); background: var(--bg); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); margin-top: -44px; padding: 52px 0 6px; }
+.cover h1 { font-size: clamp(38px, 6.2vw, 70px); max-width: 21ch; margin-bottom: 18px; }
+.cover .answer { font: 400 clamp(19px, 2.3vw, 25px)/1.42 var(--serif); color: var(--ink-2); max-width: 52ch; margin: 0 0 22px; text-wrap: pretty; }
+.cover .byline { border-bottom: 0; padding-bottom: 6px; }
+.cover figure.hero { margin-bottom: 8px; }
+.cover + .abstract, .cover ~ .findings { margin-top: 40px; }
+:root { --good: var(--s1); --bad: var(--accent); }
+h2.sec { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: 4px 22px; flex-wrap: wrap; font: 600 clamp(30px, 4.4vw, 46px)/1.05 var(--serif);
+  letter-spacing: -0.015em; margin: 60px 0 12px; padding-top: 22px; border-top: 3px solid var(--ink); }
+h2.sec .n { font: 400 clamp(58px, 9vw, 108px)/0.78 var(--serif); color: var(--accent); min-width: 0; letter-spacing: -0.04em; }
+h2.sec .n:empty { display: none; }
+.dek { font: 400 clamp(21px, 2.5vw, 27px)/1.35 var(--serif); font-style: normal; color: var(--ink); margin: 0 0 22px; text-wrap: pretty; }
+figure.panel { grid-column: 1 / -1; min-width: 0; margin: 22px 0 30px; padding: 26px 0 6px; background: var(--panel);
+  box-shadow: 0 0 0 100vmax var(--panel); clip-path: inset(0 -100vmax); }
+figure.panel .cap { max-width: 780px; margin-bottom: 14px; }
+figure.panel.explorer { border-top: 0; margin-top: 18px; }
+figure.panel .chip { background: var(--bg); }
+figure.inset { margin: 8px 0 22px; }
+.keybox .legend { margin-top: 6px; }
+details.nums { margin: -10px 0 24px; }
+details.nums summary { cursor: pointer; font: 500 14px/1.4 var(--sans); color: var(--accent); padding: 4px 0; width: fit-content; }
+details.nums[open] summary { margin-bottom: 4px; }
+.keybox details.nums { margin: 0 0 14px; }
+table.heat td { background-clip: padding-box; }
+.abstract p.plain { font: 400 clamp(18px, 2vw, 20px)/1.5 var(--serif); color: var(--ink); text-align: left; hyphens: manual; margin: 0 0 26px; }
+.findings h2.gloss-h { margin-top: 26px; }
+.gloss { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
+.gloss dt { font: 600 13px/1.3 var(--sans); color: var(--ink); margin-top: 9px; }
+.gloss dt:first-child { margin-top: 0; }
+.gloss dd { margin: 2px 0 0; }
+@media (max-width: 560px) {
+  h2.sec { margin-top: 56px; }
+  figure.panel { padding-top: 20px; }
+}
+</style>
+
+<script>try { const t = localStorage.getItem("vol-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<div class="bar"><div class="bar-in"><nav aria-label="Sections">
+  <a class="brand" href="#top">S&amp;P 500 volatility</a>
+  <a href="#question"><span>1</span>Question</a><a href="#data"><span>2</span>Data</a><a href="#preprocessing"><span>3</span>Preprocessing</a><a href="#methods"><span>4</span>Methods</a><a href="#evaluation"><span>5</span>Evaluation</a><a href="#results"><span>6</span>Results</a><a href="#errors"><span>7</span>Errors</a><a href="#limitations"><span>8</span>Limitations</a><a href="#conclusion"><span>9</span>Conclusion</a><a href="#reproduce"><span>10</span>Reproduce</a><a href="#ai-use">AI use</a>
+</nav>
+  <button class="theme-btn" id="theme-btn" type="button">Dark mode</button></div></div>
+<!--@MAIN-->
+<footer>ES 335 course project, 2026. Forecasts are from the project notebook; market data from Yahoo Finance.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+const RAW = /*__DATA__*/null;
+const VAL = /*__VAL__*/null;
+const MODELS = [
+  { key: "XGBoost-QLIKE", label: "XGBoost (QLIKE loss)", c: "--s1" },
+  { key: "GARCH", label: "GARCH(1,1)", c: "--s2" },
+  { key: "HAR + VIX", label: "HAR + range + VIX", c: "--s3" },
+  { key: "Random forest", label: "Random forest", c: "--s4" },
+  { key: "XGBoost", label: "XGBoost (squared error)", c: "--s5" },
+  { key: "HAR", label: "HAR", c: "--s6" },
+  { key: "EWMA", label: "EWMA", c: "--s7" },
+  { key: "Rolling (22d)", label: "Rolling (22-day)", c: "--s8" },
+  { key: "Naive (5d)", label: "Naive (5-day)", c: "--s9" },
+];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const pct = v => (v * 100).toFixed(2) + "%";
+const f3 = v => v.toFixed(3);
+const parse = d3.utcParse("%Y-%m-%d");
+const fmtDate = d3.utcFormat("%-d %b %Y");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const colIdx = Object.fromEntries(RAW.cols.map((c, i) => [c, i]));
+const rows = RAW.rows.map(r => { const o = { date: parse(r[0]), actual: r[colIdx.actual] }; MODELS.forEach(m => { o[m.key] = r[colIdx[m.key]]; }); return o; });
+const vci = Object.fromEntries(VAL.cols.map((c, i) => [c, i]));
+const vr = VAL.rows.map(r => ({ date: parse(r[0]), actual: r[vci.actual], GARCH: r[vci.GARCH], nov: r[vci["XGBoost-QLIKE (no VIX)"]], vix: r[vci["XGBoost-QLIKE (with VIX)"]] }));
+function qlike(rs, k) { let s = 0; for (const r of rs) { const x = (r.actual / r[k]) ** 2; s += x - Math.log(x) - 1; } return s / rs.length; }
+function rmse(rs, k) { let s = 0; for (const r of rs) { const e = r[k] - r.actual; s += e * e; } return Math.sqrt(s / rs.length); }
+const sw = (c, extra) => `<span class="sw" style="background:var(${c})${extra || ""}"></span>`;
+function axes(svg, x, y, W, H, m, xt) {
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(""));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(xt.tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(v => (v * 100).toFixed(y.domain()[1] > 0.04 ? 0 : 1) + "%").tickSizeOuter(0))
+    .call(g => g.select(".domain").remove());
+}
+function placeTip(tip, el, cx, W, top) {
+  tip.hidden = false;
+  const scale = el.clientWidth / W, tw = tip.offsetWidth;
+  let left = cx * scale + 14; if (left + tw > el.clientWidth) left = cx * scale - tw - 14;
+  tip.style.left = Math.max(0, left) + "px"; tip.style.top = top + "px";
+}
+
+// ---- Figure 1: 2019-2026 actual volatility, shaded by level
+const heroEl = document.getElementById("hero-chart");
+const heroTip = document.createElement("div"); heroTip.className = "tip"; heroTip.hidden = true; heroEl.appendChild(heroTip);
+const heroRows = vr.map(r => ({ date: r.date, actual: r.actual })).concat(rows.map(r => ({ date: r.date, actual: r.actual, f: r["XGBoost-QLIKE"] })));
+const cssH = n => getComputedStyle(heroEl).getPropertyValue(n).trim();
+function drawHero() {
+  const W = Math.max(320, heroEl.clientWidth), narrow = W < 640, H = narrow ? 260 : 400, m = { t: 34, r: 8, b: 24, l: 38 };
+  const x = d3.scaleUtc().domain(d3.extent(heroRows, r => r.date)).range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain([0, 0.095]).range([H - m.b, m.t]);
+  d3.select(heroEl).select("svg").remove();
+  const svg = d3.select(heroEl).insert("svg", ".tip").attr("viewBox", `0 0 ${W} ${H}`);
+  const t0 = rows[0].date;
+  svg.append("rect").attr("x", x(t0)).attr("y", m.t - 26).attr("width", W - m.r - x(t0)).attr("height", H - m.b - m.t + 26).attr("fill", cssH("--test-shade"));
+  const lab = (X, t, c) => svg.append("text").attr("x", X).attr("y", m.t - 12).attr("font-family", "var(--sans)").attr("font-size", 11.5).attr("letter-spacing", "0.05em").attr("fill", cssH(c)).text(t);
+  lab(m.l + 2, narrow ? "VALIDATION 2019–22" : "VALIDATION 2019–2022 · USED FOR TUNING", "--ink-3");
+  lab(x(t0) + 8, narrow ? "TEST 2023–26" : "TEST 2023–2026 · SCORED ONCE", "--ink");
+  const gr = svg.append("defs").append("linearGradient").attr("id", "heat").attr("gradientUnits", "userSpaceOnUse").attr("x1", 0).attr("x2", 0).attr("y1", y(0)).attr("y2", y(0.06));
+  [[0, "--heat0"], [0.3, "--heat1"], [1, "--heat2"]].forEach(([o, c]) => gr.append("stop").attr("offset", o).attr("stop-color", cssH(c)));
+  axes(svg, x, y, W, H, m, d3.axisBottom(x).ticks(d3.utcYear.every(narrow ? 2 : 1)));
+  svg.append("path").attr("d", d3.area().x(r => x(r.date)).y0(y(0)).y1(r => y(r.actual)).curve(d3.curveMonotoneX)(heroRows)).attr("fill", "url(#heat)");
+  svg.append("path").attr("d", d3.line().x(r => x(r.date)).y(r => y(r.f)).curve(d3.curveMonotoneX)(heroRows.filter(r => r.f))).attr("fill", "none").attr("stroke", cssH("--s1")).attr("stroke-width", 1.4);
+  const peak = (a, b) => d3.greatest(heroRows.filter(r => r.date >= parse(a) && r.date <= parse(b)), r => r.actual);
+  const ann = (p, t, dy) => { const X = x(p.date), Y = y(p.actual);
+    svg.append("line").attr("x1", X).attr("x2", X).attr("y1", Y - 3).attr("y2", Y - dy).attr("stroke", cssH("--ink-2"));
+    svg.append("text").attr("x", X + 5).attr("y", Y - dy + 4).attr("font-family", "var(--sans)").attr("font-weight", 600).attr("font-size", 12.5).attr("fill", cssH("--ink"))
+      .attr("stroke", cssH("--bg")).attr("stroke-width", 3).attr("paint-order", "stroke").text(t); };
+  ann(peak("2020-01-01", "2020-12-31"), narrow ? "COVID, 9.0%" : `COVID crash, ${pct(peak("2020-01-01", "2020-12-31").actual).replace(/0%$/, "%")} a day`, 4);
+  if (!narrow) ann(peak("2022-01-01", "2022-12-31"), "2022 bear market", 16);
+  ann(peak("2025-01-01", "2025-12-31"), narrow ? "Tariffs, 5.4%" : "Tariff shock, April 2025", 8);
+  const cross = svg.append("line").attr("stroke", cssH("--ink-3")).attr("y1", m.t).attr("y2", H - m.b).attr("opacity", 0);
+  const bis = d3.bisector(r => r.date).center;
+  svg.append("rect").attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b).attr("fill", "transparent").style("cursor", "crosshair")
+    .on("pointermove", ev => { const [px] = d3.pointer(ev); const r = heroRows[bis(heroRows, x.invert(px))]; if (!r) return;
+      const cx = x(r.date); cross.attr("x1", cx).attr("x2", cx).attr("opacity", 1);
+      heroTip.innerHTML = `<div class="d">${fmtDate(r.date)}</div><div class="row"><span>Actual next-week volatility</span><b>${pct(r.actual)}</b></div>` +
+        (r.f ? `<div class="row"><span>XGBoost-QLIKE forecast</span><b>${pct(r.f)}</b></div>` : `<div class="row"><span>Validation period</span><b></b></div>`);
+      placeTip(heroTip, heroEl, cx, W, 8); })
+    .on("pointerleave", () => { cross.attr("opacity", 0); heroTip.hidden = true; });
+}
+
+// ---- Figure: test-period explorer
+const state = { shown: new Set(["XGBoost-QLIKE", "GARCH", "HAR + VIX"]), range: d3.extent(rows, r => r.date) };
+const fullExtent = d3.extent(rows, r => r.date);
+const chipsEl = document.getElementById("model-chips");
+MODELS.forEach(m => {
+  const b = document.createElement("button");
+  b.className = "chip"; b.type = "button"; b.id = "chip-" + m.key.replace(/[^a-z0-9]/gi, "");
+  b.setAttribute("aria-pressed", state.shown.has(m.key));
+  b.innerHTML = `<span class="dot" style="background:var(${m.c})"></span>${m.label}`;
+  b.addEventListener("click", () => { state.shown.has(m.key) ? state.shown.delete(m.key) : state.shown.add(m.key); b.setAttribute("aria-pressed", state.shown.has(m.key)); drawMain(); drawRangeTable(); });
+  chipsEl.appendChild(b);
+});
+const PRESETS = [["All", fullExtent], ["2023", ["2023-01-01", "2023-12-31"]], ["2024", ["2024-01-01", "2024-12-31"]], ["2025", ["2025-01-01", "2025-12-31"]], ["Apr 2025", ["2025-03-01", "2025-05-31"]], ["2026", ["2026-01-01", "2026-12-31"]]];
+const presetsEl = document.getElementById("presets");
+PRESETS.forEach(([lab, ext]) => {
+  const b = document.createElement("button");
+  b.className = "chip"; b.type = "button"; b.textContent = lab; b.id = "preset-" + lab.replace(/\s/g, "");
+  b.setAttribute("aria-pressed", lab === "All");
+  b.addEventListener("click", () => setRange(ext.map(d => d instanceof Date ? d : parse(d)), lab));
+  presetsEl.appendChild(b);
+});
+function markPreset(lab) { presetsEl.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c.textContent === lab)); }
+const mainEl = document.getElementById("main-chart"), ctxEl = document.getElementById("ctx-chart");
+const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; mainEl.appendChild(tip);
+let ctx = {};
+function inRange() { const [a, b] = state.range; return rows.filter(r => r.date >= a && r.date <= b); }
+function drawMain() {
+  const W = Math.max(300, mainEl.clientWidth), H = W < 560 ? 260 : 340, m = { t: 12, r: 12, b: 26, l: 44 };
+  const rs = inRange(), keys = MODELS.filter(x => state.shown.has(x.key));
+  const ymax = d3.max(rs, r => Math.max(r.actual, ...keys.map(k => r[k.key]))) || 0.02;
+  const x = d3.scaleUtc().domain(state.range).range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain([0, ymax * 1.08]).nice().range([H - m.b, m.t]);
+  d3.select(mainEl).select("svg").remove();
+  const svg = d3.select(mainEl).insert("svg", ".tip").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", "Actual and forecast next-week volatility over the selected dates");
+  axes(svg, x, y, W, H, m, d3.axisBottom(x).ticks(W < 560 ? 4 : 7));
+  const line = k => d3.line().x(r => x(r.date)).y(r => y(r[k])).curve(d3.curveMonotoneX)(rs);
+  const g = svg.append("g").attr("fill", "none").attr("stroke-linejoin", "round").attr("stroke-linecap", "round");
+  [...keys].reverse().forEach(k => g.append("path").attr("d", line(k.key)).attr("stroke", css(k.c)).attr("stroke-width", 1.8).attr("stroke-dasharray", k.key === "Naive (5d)" ? "4 3" : null));
+  g.append("path").attr("d", line("actual")).attr("stroke", css("--ink")).attr("stroke-width", 1.4);
+  svg.append("text").attr("x", W - m.r).attr("y", m.t + 10).attr("text-anchor", "end").attr("font-family", "var(--sans)").attr("font-size", 11.5).attr("fill", css("--ink-2")).text(matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" || document.documentElement.dataset.theme === "dark" ? "white line = actual" : "black line = actual");
+  const cross = svg.append("line").attr("stroke", css("--ink-3")).attr("y1", m.t).attr("y2", H - m.b).attr("opacity", 0);
+  const dots = svg.append("g"), bis = d3.bisector(r => r.date).center;
+  svg.append("rect").attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b).attr("fill", "transparent").style("cursor", "crosshair")
+    .on("pointermove", ev => {
+      const [px] = d3.pointer(ev); const r = rs[bis(rs, x.invert(px))]; if (!r) return;
+      const cx = x(r.date); cross.attr("x1", cx).attr("x2", cx).attr("opacity", 1);
+      dots.selectAll("circle").data([{ k: "actual", c: "--ink" }, ...keys.map(k => ({ k: k.key, c: k.c }))]).join("circle")
+        .attr("cx", cx).attr("cy", d => y(r[d.k])).attr("r", 3.5).attr("fill", d => css(d.c)).attr("stroke", css("--bg")).attr("stroke-width", 1.5);
+      const items = [{ l: "Actual", v: r.actual, c: "--ink" }, ...keys.map(k => ({ l: k.label, v: r[k.key], c: k.c }))].sort((a, b) => b.v - a.v);
+      tip.innerHTML = `<div class="d">${fmtDate(r.date)}</div>` + items.map(i => `<div class="row"><span>${sw(i.c)}${i.l}</span><b>${pct(i.v)}</b></div>`).join("");
+      placeTip(tip, mainEl, cx, W, 6);
+    })
+    .on("pointerleave", () => { cross.attr("opacity", 0); dots.selectAll("circle").remove(); tip.hidden = true; });
+  document.getElementById("range-label").textContent = `${fmtDate(state.range[0])} – ${fmtDate(state.range[1])} · ${rs.length} days`;
+}
+function drawCtx() {
+  const W = Math.max(300, ctxEl.clientWidth), H = 62, m = { t: 4, r: 12, b: 20, l: 44 };
+  const x = d3.scaleUtc().domain(fullExtent).range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain([0, d3.max(rows, r => r.actual)]).range([H - m.b, m.t]);
+  d3.select(ctxEl).select("svg").remove();
+  const svg = d3.select(ctxEl).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("aria-label", "Date range selector");
+  svg.append("path").attr("d", d3.area().x(r => x(r.date)).y0(H - m.b).y1(r => y(r.actual))(rows)).attr("fill", css("--ink-3")).attr("opacity", 0.35);
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(d3.utcYear.every(1)).tickSizeOuter(0));
+  const brush = d3.brushX().extent([[m.l, m.t], [W - m.r, H - m.b]]).on("brush end", ev => {
+    if (!ev.sourceEvent) return;
+    if (!ev.selection) { state.range = fullExtent.slice(); markPreset("All"); } else { state.range = ev.selection.map(x.invert); markPreset(""); }
+    drawMain(); drawRangeTable();
+  });
+  const bg = svg.append("g").attr("class", "brush").call(brush);
+  ctx = { brush, bg, x };
+  if (!(+state.range[0] === +fullExtent[0] && +state.range[1] === +fullExtent[1])) bg.call(brush.move, state.range.map(x));
+}
+function setRange(ext, lab) {
+  const a = ext[0] < fullExtent[0] ? fullExtent[0] : ext[0], b = ext[1] > fullExtent[1] ? fullExtent[1] : ext[1];
+  state.range = [a, b]; markPreset(lab || "");
+  if (+a === +fullExtent[0] && +b === +fullExtent[1]) ctx.bg.call(ctx.brush.move, null); else ctx.bg.call(ctx.brush.move, [ctx.x(a), ctx.x(b)]);
+  drawMain(); drawRangeTable();
+}
+function drawRangeTable() {
+  const rs = inRange();
+  const res = MODELS.map(m => ({ m, q: qlike(rs, m.key), e: rmse(rs, m.key) })).sort((a, b) => a.q - b.q);
+  const g = res.find(r => r.m.key === "GARCH").q;
+  let h = `<thead><tr><th>Model, selected dates</th><th>QLIKE</th><th>×&nbsp;GARCH</th><th>RMSE</th></tr></thead><tbody>`;
+  res.forEach((r, i) => { const on = state.shown.has(r.m.key);
+    h += `<tr class="${i === 0 ? "best" : ""}${on ? "" : " off"}"><td>${sw(r.m.c)}${r.m.label}${i === 0 ? " · best" : ""}</td><td>${f3(r.q)}</td><td>${(r.q / g).toFixed(2)}</td><td>${r.e.toFixed(4)}</td></tr>`; });
+  document.getElementById("range-table").innerHTML = h + "</tbody>";
+}
+document.querySelectorAll(".ep").forEach(b => b.addEventListener("click", () => { setRange([parse(b.dataset.lo), parse(b.dataset.hi)], ""); document.getElementById("explorer").scrollIntoView(); }));
+
+// ---- Figure: before/after VIX
+const vixDraw = (function vix() {
+  const NAME = { GARCH: "GARCH(1,1)", nov: "XGBoost-QLIKE without VIX", vix: "XGBoost-QLIKE with VIX" };
+  const MODES = [["nov", "Without VIX"], ["vix", "With VIX"]];
+  const WINS = [
+    { lab: "Crash, Feb–May 2020", ext: ["2020-02-03", "2020-05-29"],
+      note: q => `Over these four months VIX made no difference: ${f3(q.nov)} without it, ${f3(q.vix)} with it, against ${f3(q.GARCH)} for GARCH. Both versions hit a flat top on 12 March. Switch versions and watch the dashed line: VIX lifted the top only from ${pct(q.max.nov)} to ${pct(q.max.vix)}, while actual volatility peaked at ${pct(q.max.actual)}.` },
+    { lab: "After the crash, Jul–Nov 2020", ext: ["2020-07-01", "2020-11-30"],
+      note: q => `Here VIX earned its place: ${f3(q.vix)} with it, ${f3(q.nov)} without, ${f3(q.GARCH)} for GARCH. Realised volatility fell over the summer, but VIX stayed above its calm-year levels, so the VIX version kept forecasting higher than the others. That over-prediction cost little, and the model was ready when the September sell-off came.` },
+    { lab: "Calming down, Jan–Mar 2019", ext: ["2019-01-02", "2019-03-29"],
+      note: q => `VIX working in the other direction. After the December 2018 sell-off the VIX version came down within days, while past-return inputs kept the other two forecasts high for weeks: ${f3(q.vix)} with VIX, ${f3(q.nov)} without, ${f3(q.GARCH)} for GARCH.` },
+    { lab: "All of 2019–2022", ext: null,
+      note: q => `Over the four validation years: ${f3(q.vix)} with VIX, ${f3(q.nov)} without, ${f3(q.GARCH)} for GARCH. Both XGBoost versions beat GARCH, but even with VIX the model never forecast above ${pct(q.max.vix)}, less than half the ${pct(q.max.actual)} peak.` },
+  ];
+  const st = { mode: "nov", win: 0 };
+  const el = document.getElementById("vix-chart");
+  const tipV = document.createElement("div"); tipV.className = "tip"; tipV.hidden = true; el.appendChild(tipV);
+  const mkChip = (lab, on, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = lab; b.setAttribute("aria-pressed", on); b.addEventListener("click", fn); return b; };
+  const modeEl = document.getElementById("vix-mode"), winEl = document.getElementById("vix-win");
+  MODES.forEach(([k, lab]) => modeEl.appendChild(mkChip(lab, k === st.mode, () => { st.mode = k; marks(); switchMode(); })));
+  WINS.forEach((w, i) => winEl.appendChild(mkChip(w.lab, i === st.win, () => { st.win = i; marks(); render(); })));
+  function marks() {
+    modeEl.querySelectorAll(".chip").forEach((c, i) => c.setAttribute("aria-pressed", MODES[i][0] === st.mode));
+    winEl.querySelectorAll(".chip").forEach((c, i) => c.setAttribute("aria-pressed", i === st.win));
+  }
+  const winRows = () => { const w = WINS[st.win]; if (!w.ext) return vr; const [a, b] = w.ext.map(parse); return vr.filter(r => r.date >= a && r.date <= b); };
+  let cur = {};
+  function legend() {
+    const other = st.mode === "nov" ? "with" : "without";
+    document.getElementById("vix-legend").innerHTML =
+      `<span><i style="border-color:var(--ink)"></i>Actual</span><span><i style="border-color:var(--s2)"></i>GARCH(1,1)</span>` +
+      `<span><i style="border-color:var(--s1);border-top-width:2.5px"></i>${NAME[st.mode]}</span>` +
+      `<span><i style="border-color:var(--s1);border-top-style:dashed;opacity:.5"></i>Same model ${other} VIX</span>` +
+      `<span><i style="border-color:var(--ink-3);border-top-style:dashed;border-top-width:1px"></i>Highest forecast</span>`;
+  }
+  function render() {
+    const rs = winRows();
+    const W = Math.max(300, el.clientWidth), H = W < 560 ? 260 : 320, m = { t: 16, r: 12, b: 26, l: 44 };
+    const ymax = d3.max(rs, r => Math.max(r.actual, r.GARCH, r.nov, r.vix));
+    const x = d3.scaleUtc().domain(d3.extent(rs, r => r.date)).range([m.l, W - m.r]);
+    const y = d3.scaleLinear().domain([0, ymax * 1.08]).nice().range([H - m.b, m.t]);
+    d3.select(el).select("svg").remove();
+    const svg = d3.select(el).insert("svg", ".tip").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", "Actual next-week volatility against GARCH and XGBoost-QLIKE trained without and with VIX");
+    axes(svg, x, y, W, H, m, d3.axisBottom(x).ticks(W < 560 ? 4 : 7));
+    const line = k => d3.line().x(r => x(r.date)).y(r => y(r[k])).curve(d3.curveMonotoneX)(rs);
+    const g = svg.append("g").attr("fill", "none").attr("stroke-linejoin", "round").attr("stroke-linecap", "round");
+    const other = st.mode === "nov" ? "vix" : "nov";
+    const hl = svg.append("g");
+    const hline = hl.append("line").attr("x1", m.l).attr("x2", W - m.r).attr("stroke", css("--ink-3")).attr("stroke-width", 1).attr("stroke-dasharray", "4 3");
+    const hlab = hl.append("text").attr("x", W - m.r - 4).attr("text-anchor", "end").attr("font-family", "var(--sans)").attr("font-size", 11.5).attr("fill", css("--ink-2"))
+      .attr("stroke", css("--bg")).attr("stroke-width", 3).attr("paint-order", "stroke");
+    const ghost = g.append("path").attr("d", line(other)).attr("stroke", css("--s1")).attr("stroke-width", 1.4).attr("stroke-dasharray", "5 4").attr("opacity", 0.5);
+    g.append("path").attr("d", line("GARCH")).attr("stroke", css("--s2")).attr("stroke-width", 1.8);
+    const mainP = g.append("path").attr("d", line(st.mode)).attr("stroke", css("--s1")).attr("stroke-width", 2.4);
+    g.append("path").attr("d", line("actual")).attr("stroke", css("--ink")).attr("stroke-width", 1.4);
+    const cross = svg.append("line").attr("stroke", css("--ink-3")).attr("y1", m.t).attr("y2", H - m.b).attr("opacity", 0);
+    const dots = svg.append("g"), bis = d3.bisector(r => r.date).center;
+    svg.append("rect").attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b).attr("fill", "transparent").style("cursor", "crosshair")
+      .on("pointermove", ev => {
+        const [px] = d3.pointer(ev); const r = rs[bis(rs, x.invert(px))]; if (!r) return;
+        const cx = x(r.date); cross.attr("x1", cx).attr("x2", cx).attr("opacity", 1);
+        const oth = st.mode === "nov" ? "vix" : "nov";
+        const items = [{ k: "actual", l: "Actual", c: "--ink" }, { k: "GARCH", l: "GARCH(1,1)", c: "--s2" }, { k: "nov", l: "Without VIX", c: "--s1" }, { k: "vix", l: "With VIX", c: "--s1" }];
+        dots.selectAll("circle").data(items.filter(i => i.k !== oth)).join("circle").attr("cx", cx).attr("cy", d => y(r[d.k])).attr("r", 3.5).attr("fill", d => css(d.c)).attr("stroke", css("--bg")).attr("stroke-width", 1.5);
+        tipV.innerHTML = `<div class="d">${fmtDate(r.date)}</div>` + items.map(i => `<div class="row"${i.k === oth ? ' style="opacity:.6"' : ""}><span>${sw(i.c)}${i.l}</span><b>${pct(r[i.k])}</b></div>`).join("");
+        placeTip(tipV, el, cx, W, 6);
+      })
+      .on("pointerleave", () => { cross.attr("opacity", 0); dots.selectAll("circle").remove(); tipV.hidden = true; });
+    cur = { rs, line, mainP, ghost, hline, hlab, y };
+    placeTop(false); legend(); table();
+  }
+  function placeTop(animate) {
+    const { rs, y, hline, hlab } = cur, top = d3.max(rs, r => r[st.mode]);
+    const t = d3.transition().duration(animate && !reduceMotion ? 650 : 0).ease(d3.easeCubicInOut);
+    hline.transition(t).attr("y1", y(top)).attr("y2", y(top));
+    hlab.transition(t).attr("y", y(top) - 5);
+    hlab.text(`highest forecast ${pct(top)}`);
+  }
+  function switchMode() {
+    const { line, mainP, ghost } = cur, other = st.mode === "nov" ? "vix" : "nov";
+    const t = d3.transition().duration(reduceMotion ? 0 : 650).ease(d3.easeCubicInOut);
+    mainP.transition(t).attr("d", line(st.mode)); ghost.transition(t).attr("d", line(other));
+    placeTop(true); legend(); table();
+  }
+  function table() {
+    const rs = cur.rs, w = WINS[st.win];
+    const q = { GARCH: qlike(rs, "GARCH"), nov: qlike(rs, "nov"), vix: qlike(rs, "vix"),
+      max: { nov: d3.max(rs, r => r.nov), vix: d3.max(rs, r => r.vix), GARCH: d3.max(rs, r => r.GARCH), actual: d3.max(rs, r => r.actual) } };
+    const best = Math.min(q.GARCH, q.nov, q.vix);
+    let h = `<thead><tr><th>Model, ${w.lab.replace(/^[^,]*, /, "")}</th><th>QLIKE</th><th>×&nbsp;GARCH</th><th>Peak forecast</th></tr></thead><tbody>`;
+    ["GARCH", "nov", "vix"].forEach(k => { const dim = k !== "GARCH" && k !== st.mode;
+      h += `<tr class="${q[k] === best ? "best" : ""}${dim ? " off" : ""}"><td>${sw(k === "GARCH" ? "--s2" : "--s1", dim ? ";opacity:.45" : "")}${NAME[k]}${k === st.mode ? " · shown" : ""}</td><td>${f3(q[k])}</td><td>${(q[k] / q.GARCH).toFixed(2)}</td><td>${pct(q.max[k])}</td></tr>`; });
+    h += `<tr class="off"><td>Actual</td><td></td><td></td><td>${pct(q.max.actual)}</td></tr></tbody>`;
+    document.getElementById("vix-table").innerHTML = h;
+    document.getElementById("vix-note").innerHTML = w.note(q);
+  }
+  render();
+  return render;
+})();
+
+// ---- Chart-led figures (static explanations; every number is also in the text or a table)
+const TX = (g, x, y, txt, o = {}) => g.append("text").attr("x", x).attr("y", y).attr("font-family", "var(--sans)").attr("font-size", o.fs || 12)
+  .attr("font-weight", o.fw || 400).attr("font-style", o.it ? "italic" : null).attr("fill", css(o.c || "--ink-2")).attr("text-anchor", o.a || "start")
+  .attr("stroke", o.halo === false ? null : css(o.halo || "--panel")).attr("stroke-width", o.halo === false ? null : 3.5).attr("paint-order", "stroke").text(txt);
+function fresh(el, H, W) { d3.select(el).select("svg").remove(); return d3.select(el).append("svg").attr("viewBox", `0 0 ${W} ${H}`); }
+function arrowDefs(svg, id, color) {
+  svg.append("defs").append("marker").attr("id", id).attr("viewBox", "0 0 10 10").attr("refX", 8).attr("refY", 5).attr("markerWidth", 7).attr("markerHeight", 7)
+    .attr("orient", "auto-start-reverse").append("path").attr("d", "M0,0 L10,5 L0,10 z").attr("fill", color);
+}
+const pctAx = v => (v * 100 >= 1 ? d3.format(".0f")(v * 100) : d3.format(".1f")(v * 100)) + "%";
+
+// Figure: this week against next week (volatility clusters)
+const clusterEl = document.getElementById("cluster-chart");
+const actSeq = heroRows.map(r => r.actual);
+const wk = []; for (let i = 0; i + 5 < actSeq.length; i += 5) wk.push({ a: actSeq[i], b: actSeq[i + 5], d: heroRows[i].date });
+function drawCluster() {
+  const W = Math.max(300, clusterEl.clientWidth), narrow = W < 600, H = narrow ? Math.round(W * 0.95) : 420, m = { t: 14, r: 14, b: 44, l: 52 };
+  const svg = fresh(clusterEl, H, W);
+  const x = d3.scaleLog().domain([0.0012, 0.1]).range([m.l, W - m.r]), y = d3.scaleLog().domain([0.0012, 0.1]).range([H - m.b, m.t]);
+  const tv = [0.002, 0.005, 0.01, 0.02, 0.05];
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).tickValues(tv).tickSize(-(W - m.l - m.r)).tickFormat(""));
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(tv).tickSize(-(H - m.t - m.b)).tickFormat(""));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(tv).tickFormat(pctAx).tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).tickValues(tv).tickFormat(pctAx).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+  svg.append("line").attr("x1", x(0.0012)).attr("y1", y(0.0012)).attr("x2", x(0.1)).attr("y2", y(0.1)).attr("stroke", css("--ink-3")).attr("stroke-dasharray", "4 4");
+  const col = d3.scaleLog().domain([0.004, 0.012, 0.04]).range([css("--heat1"), css("--heat2"), css("--heat2")]).clamp(true);
+  svg.append("g").selectAll("circle").data(wk).join("circle").attr("cx", d => x(d.a)).attr("cy", d => y(d.b)).attr("r", narrow ? 2.6 : 3.4)
+    .attr("fill", d => col(d.b)).attr("fill-opacity", 0.78);
+  TX(svg, x(0.07), y(0.07) + 16, "next week = this week", { fs: 11.5, c: "--ink-3", a: "end", it: true });
+  TX(svg, x(0.0016), y(0.0016) - 34, "calm weeks", { fs: 12.5, fw: 600, c: "--ink" }); TX(svg, x(0.0016), y(0.0016) - 18, "stay calm", { fs: 12.5, c: "--ink-2" });
+  const pk = d3.greatest(wk, d => d.b);
+  TX(svg, x(pk.a) - 10, y(pk.b) + 4, `COVID: ${pctAx(pk.a)} → ${(pk.b * 100).toFixed(1)}%`, { fs: 12, fw: 600, c: "--ink", a: "end" });
+  TX(svg, (m.l + W - m.r) / 2, H - 6, "This week's volatility (typical daily move)", { fs: 12, c: "--ink-2", a: "middle" });
+  TX(svg, 0, 0, "Next week's volatility", { fs: 12, c: "--ink-2", a: "middle" }).attr("transform", `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)`);
+}
+
+// Figure: features, before and after
+const featEl = document.getElementById("feat-chart");
+const FEATS = [["high_low_1", "the day's high–low range", 0.497, 0.458, true], ["+ 5-day range", "on top of high_low_1", 0.458, 0.478, false],
+  ["vix", "the VIX index", 0.458, 0.400, true], ["+ today's negative return", "on top of vix", 0.400, 0.3985, false], ["+ 5/22-day volatility ratio", "on top of vix", 0.400, 0.399, false]];
+function drawFeat() {
+  const W = Math.max(300, featEl.clientWidth), narrow = W < 600, lw = narrow ? 0 : 250, rh = narrow ? 62 : 50, m = { t: 26, r: 56, b: 30, l: lw + 10 };
+  const H = m.t + FEATS.length * rh + m.b, svg = fresh(featEl, H, W);
+  const x = d3.scaleLinear().domain([0.39, 0.505]).range([m.l, W - m.r]);
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(narrow ? 4 : 6).tickSize(-(H - m.t - m.b)).tickFormat(""));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(narrow ? 4 : 6).tickFormat(d3.format(".2f")).tickSizeOuter(0));
+  TX(svg, x(0.39), m.t - 12, "← better (lower validation QLIKE)", { fs: 11.5, c: "--ink-3" });
+  arrowDefs(svg, "ak", css("--kept")); arrowDefs(svg, "ad", css("--ink-3"));
+  FEATS.forEach(([n, d, a, b, kept], i) => {
+    const yy = m.t + i * rh + (narrow ? 40 : rh / 2), c = kept ? "--kept" : "--ink-3";
+    if (narrow) TX(svg, 0, yy - 20, n, { fs: 13, fw: 600, c: "--ink" });
+    else { TX(svg, 0, yy - 3, n, { fs: 13.5, fw: 600, c: "--ink" }); TX(svg, 0, yy + 13, d, { fs: 12, c: "--ink-3" }); }
+    svg.append("circle").attr("cx", x(a)).attr("cy", yy).attr("r", 3).attr("fill", css("--ink-3"));
+    if (Math.abs(x(b) - x(a)) > 9) svg.append("line").attr("x1", x(a)).attr("x2", x(b)).attr("y1", yy).attr("y2", yy).attr("stroke", css(c)).attr("stroke-width", kept ? 3 : 2).attr("marker-end", `url(#${kept ? "ak" : "ad"})`);
+    else svg.append("circle").attr("cx", x(b)).attr("cy", yy).attr("r", 4.5).attr("fill", "none").attr("stroke", css(c)).attr("stroke-width", 2);
+    const right = b > a || Math.abs(x(b) - x(a)) <= 9;
+    TX(svg, right ? Math.max(x(a), x(b)) + 10 : x(b) - 8, yy + 4, (b === 0.3985 ? "0.3985" : b.toFixed(3)) + (kept ? "  kept" : "  dropped"), { fs: 12.5, fw: kept ? 600 : 400, c: kept ? "--kept" : "--ink-2", a: right ? "start" : "end" });
+  });
+}
+
+// Figure: the path the project took (validation QLIKE per step)
+const pathEl = document.getElementById("path-chart");
+const STEPS = [["HAR", "linear regression on past volatility", 0.545, 1], ["Log-HAR", "HAR fitted on logs", 0.561, 0, 0], ["Random forest", "smaller leaves for crash weeks", 0.547, 0, 0],
+  ["XGBoost", "boosted depth-1 trees", 0.516, 1], ["XGBoost, QLIKE loss", "same model, trained on the score", 0.497, 1], ["+ the day's range", "high_low_1 added", 0.458, 1],
+  ["+ VIX", "the market's own forecast", 0.400, 1], ["GARCH-anchored hybrid", "start from GARCH's forecast", 0.435, 0, 6]];
+function drawPath() {
+  const W = Math.max(300, pathEl.clientWidth), narrow = W < 600, lw = narrow ? 0 : 250, rh = narrow ? 56 : 44, m = { t: 30, r: 60, b: 30, l: lw + 10 };
+  const H = m.t + STEPS.length * rh + m.b, svg = fresh(pathEl, H, W);
+  const x = d3.scaleLinear().domain([0.38, 0.575]).range([m.l, W - m.r]);
+  const Y = i => m.t + i * rh + (narrow ? 36 : rh / 2);
+  svg.append("rect").attr("x", x(0.38)).attr("y", m.t - 8).attr("width", x(0.494) - x(0.38)).attr("height", H - m.b - m.t + 8).attr("fill", css("--good")).attr("fill-opacity", 0.07);
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(narrow ? 4 : 7).tickFormat(d3.format(".2f")).tickSizeOuter(0));
+  svg.append("line").attr("x1", x(0.494)).attr("x2", x(0.494)).attr("y1", m.t - 8).attr("y2", H - m.b).attr("stroke", css("--s2")).attr("stroke-width", 1.6).attr("stroke-dasharray", "5 4");
+  TX(svg, x(0.494) + 6, m.t - 12, "GARCH 0.494", { fs: 12, fw: 600, c: "--s2" });
+  TX(svg, x(0.494) - 6, m.t - 12, narrow ? "beats GARCH" : "← beats GARCH", { fs: 12, c: "--ink-2", a: "end" });
+  const kept = STEPS.map((s, i) => [s, i]).filter(([s]) => s[3]);
+  svg.append("path").attr("d", d3.line()(kept.map(([s, i]) => [x(s[2]), Y(i)]))).attr("fill", "none").attr("stroke", css("--s1")).attr("stroke-width", 2.5);
+  STEPS.forEach((s, i) => {
+    const [n, d, v, k, from] = s, yy = Y(i), c = k ? "--s1" : "--rej";
+    if (!k) svg.append("line").attr("x1", x(STEPS[from][2])).attr("y1", Y(from)).attr("x2", x(v)).attr("y2", yy).attr("stroke", css("--rej")).attr("stroke-width", 1.5).attr("stroke-dasharray", "4 3");
+    svg.append("circle").attr("cx", x(v)).attr("cy", yy).attr("r", k ? 6 : 5.5).attr("fill", k ? css("--s1") : css("--panel")).attr("stroke", css(c)).attr("stroke-width", 2);
+    TX(svg, i === 6 ? x(v) - 11 : x(v) + 11, yy + 4, v.toFixed(3) + (k ? "" : "  rejected"), { fs: 12.5, fw: k ? 600 : 400, c: k ? "--ink" : "--rej", a: i === 6 ? "end" : "start" });
+    if (narrow) TX(svg, 0, yy - 16, n, { fs: 13, fw: k ? 600 : 400, c: k ? "--ink" : "--ink-2" });
+    else { TX(svg, 0, yy - 2, n, { fs: 13.5, fw: k ? 600 : 400, c: k ? "--ink" : "--ink-2" }); TX(svg, 0, yy + 13, d, { fs: 12, c: "--ink-3" }); }
+  });
+}
+
+// Figure: each model wins on its own metric
+const campsEl = document.getElementById("camps-chart");
+const CAMPS = [["Random forest", 0.00649, 0.547, 0, "start"], ["XGBoost", 0.00661, 0.516, 0, "end"], ["HAR", 0.00669, 0.545, 0, "start"],
+  ["XGBoost, QLIKE loss", 0.00687, 0.497, 1, "end"], ["GARCH(1,1)", 0.00690, 0.494, 1, "start"]];
+function drawCamps() {
+  const W = Math.max(280, campsEl.clientWidth), H = W < 480 ? 280 : 300, m = { t: 16, r: 16, b: 44, l: 50 };
+  const svg = fresh(campsEl, H, W);
+  const x = d3.scaleLinear().domain([0.00640, 0.00700]).range([m.l, W - m.r]), y = d3.scaleLinear().domain([0.485, 0.56]).range([H - m.b, m.t]);
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(""));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(W < 480 ? 3 : 4).tickFormat(d3.format(".4f")).tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(d3.format(".2f")).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+  arrowDefs(svg, "ac", css("--ink-2"));
+  svg.append("path").attr("d", `M${x(0.00661) + 7},${y(0.516) + 4} Q${x(0.00682)},${y(0.514)} ${x(0.00686) - 2},${y(0.497) - 8}`).attr("fill", "none").attr("stroke", css("--ink-2")).attr("stroke-width", 1.3).attr("marker-end", "url(#ac)");
+  TX(svg, x(0.00676), y(0.516) - 6, "only the loss changed", { fs: 11.5, c: "--ink-2", a: "middle", it: true, halo: "--panel" });
+  CAMPS.forEach(([n, a, b, q, anc]) => {
+    svg.append("circle").attr("cx", x(a)).attr("cy", y(b)).attr("r", 6).attr("fill", css(q ? "--s1" : "--s5"));
+    TX(svg, x(a) + (anc === "end" ? -10 : 10), y(b) + (n === "GARCH(1,1)" ? 15 : 4), n, { fs: 12.5, fw: 600, c: "--ink", a: anc });
+  });
+  TX(svg, (m.l + W - m.r) / 2, H - 6, "RMSE, lower is better", { fs: 12, c: "--ink-2", a: "middle" });
+  TX(svg, 0, 0, "QLIKE, lower is better", { fs: 12, c: "--ink-2", a: "middle" }).attr("transform", `translate(12,${(m.t + H - m.b) / 2}) rotate(-90)`);
+}
+
+// Figure: the QLIKE curve
+const qlEl = document.getElementById("qlike-chart");
+function drawQlike() {
+  const W = Math.max(280, qlEl.clientWidth), H = W < 480 ? 230 : 250, m = { t: 22, r: 14, b: 42, l: 40 };
+  const svg = fresh(qlEl, H, W);
+  const x = d3.scaleLog().domain([0.25, 4]).range([m.l, W - m.r]), y = d3.scaleLinear().domain([0, 1.7]).range([H - m.b, m.t]);
+  const f = r => 1 / r + Math.log(r) - 1;
+  svg.append("rect").attr("x", x(0.25)).attr("y", m.t).attr("width", x(1) - x(0.25)).attr("height", H - m.t - m.b).attr("fill", css("--bad")).attr("fill-opacity", 0.06);
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(""));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues([0.25, 0.5, 1, 2, 4]).tickFormat(v => v + "×").tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+  const pts = d3.range(0, 201).map(i => 0.25 * Math.pow(16, i / 200));
+  svg.append("path").attr("d", d3.line().x(r => x(r)).y(r => y(f(r)))(pts)).attr("fill", "none").attr("stroke", css("--ink")).attr("stroke-width", 2.2);
+  TX(svg, x(0.27), m.t + 14, "forecast too low", { fs: 12, fw: 600, c: "--bad" });
+  TX(svg, x(3.8), m.t + 14, "forecast too high", { fs: 12, fw: 600, c: "--ink-2", a: "end" });
+  [[0.5, "half: 0.307", -7], [2, "double: 0.193", 20]].forEach(([r, t, dy]) => {
+    svg.append("circle").attr("cx", x(r)).attr("cy", y(f(r))).attr("r", 5).attr("fill", css(r < 1 ? "--bad" : "--s1"));
+    TX(svg, x(r) + 9, y(f(r)) + dy, t, { fs: 12.5, fw: 600, c: "--ink", halo: "--bg" });
+  });
+  TX(svg, (m.l + W - m.r) / 2, H - 6, "Forecast variance ÷ actual variance", { fs: 12, c: "--ink-2", a: "middle", halo: "--bg" });
+}
+
+drawHero(); drawCtx(); drawMain(); drawRangeTable(); drawCluster(); drawFeat(); drawPath(); drawCamps(); drawQlike();
+const redraw = () => { drawHero(); drawCtx(); drawMain(); vixDraw(); drawCluster(); drawFeat(); drawPath(); drawCamps(); drawQlike(); };
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(redraw, 120); }).observe(mainEl);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+(function () {
+  const root = document.documentElement, btn = document.getElementById("theme-btn"), mq = matchMedia("(prefers-color-scheme: dark)");
+  const isDark = () => root.dataset.theme ? root.dataset.theme === "dark" : mq.matches;
+  const label = () => { btn.textContent = isDark() ? "Light mode" : "Dark mode"; btn.setAttribute("aria-label", isDark() ? "Switch to light mode" : "Switch to dark mode"); };
+  btn.addEventListener("click", () => { const t = isDark() ? "light" : "dark"; root.dataset.theme = t; try { localStorage.setItem("vol-theme", t); } catch (e) {} label(); });
+  mq.addEventListener("change", label);
+  new MutationObserver(label).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  label();
+})();
+</script>

@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 import metrics
 
-def HAR(train : pd.DataFrame, cal : pd.DataFrame, cols : list) -> pd.Series:
+def HAR(train : pd.DataFrame, cal : pd.DataFrame, cols : list, summary : bool = False) -> pd.Series:
 
     X = train[cols] #HAR is defined only for these columns
     y = train["target"]
@@ -16,6 +16,8 @@ def HAR(train : pd.DataFrame, cal : pd.DataFrame, cols : list) -> pd.Series:
 
     model = sm.OLS(y,X_c)
     res = model.fit(cov_type="HAC", cov_kwds={"maxlags": 5})
+    if summary:
+        print(res.summary())   # weights, HAC p-values, R^2, Durbin-Watson
     y_pred = res.predict(X_pred)
 
 
@@ -67,7 +69,7 @@ def XGBOOST(train: pd.DataFrame, val: pd.DataFrame, cols: list,
         n_estimators=n,              # just a ceiling now
         max_depth=depth,
         learning_rate=lr,
-        early_stopping_rounds=50,    # stop after 50 trees with no improvement in teh carved-out validation set from the otignal training set.
+        early_stopping_rounds=50,    # stop after 50 trees with no improvement in the carved-out validation set from the original training set.
         eval_metric=qlike_metric,
         random_state=42,
     )
@@ -107,13 +109,13 @@ def XGBOOST_QLIKE(train: pd.DataFrame, val: pd.DataFrame, cols: list,
         learning_rate=lr,
         objective=XG_obj,
         base_score = np.log((fit_part["target"]**2).mean()),
-        early_stopping_rounds=50,    # stop after 50 trees with no improvement in teh carved-out validation set from the otignal training set.
+        early_stopping_rounds=50,    # stop after 50 trees with no improvement in the carved-out validation set from the original training set.
         eval_metric=qlike_metric,
         random_state=42,
     )
     model.fit(
         fit_part[cols], fit_part["target"]**2,
-        eval_set=[(es_part[cols], es_part["target"]**2)],  ##here now we are preidcting varience, not volatility so that we can feed it into QLIKE
+        eval_set=[(es_part[cols], es_part["target"]**2)],  ##here now we are predicting variance, not volatility so that we can feed it into QLIKE
         verbose=False,
         
     )

@@ -8,7 +8,7 @@ vix_raw = yf.download("^VIX", start="1990-01-01", end="2026-10-01")
 vix_close = vix_raw["Close"]["^VIX"]            
 
 
-def creater_features(data : pd.DataFrame) -> pd.DataFrame:
+def create_features(data : pd.DataFrame) -> pd.DataFrame:
     log_returns = np.log(data["Close"]["^GSPC"]).diff().iloc[1:]
     sq_returns = np.square(log_returns)
     target = np.sqrt(sq_returns.rolling(5).mean()).shift(-5).iloc[:log_returns.shape[0] - 5]

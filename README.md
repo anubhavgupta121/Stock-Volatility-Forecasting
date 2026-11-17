@@ -27,7 +27,7 @@ Every model was tuned on 2019–2022 and scored once on the test years (January 
 | Rolling (22-day) | 0.467 | 1.22 | 0.0049 |
 | Naive (5-day) | 0.811 | 2.11 | 0.0049 |
 
-\* Added after a grade review as an extra baseline (last cells of the notebook); no model choice changed.
+\* Added after a review as an extra baseline (last cells of the notebook); no model choice changed.
 
 Main findings:
 
@@ -106,4 +106,4 @@ Models use `random_state=42`. GARCH is fitted only on data before each cutoff. Y
 
 ## AI use
 
-Claude (Anthropic) was used to explain methods, give suggestions, debug code (for example early stopping, the GARCH-anchored hybrid and the final formatted test cell in the notebook), review results, build the project website, and, after a grade review, write the check cells at the end of the notebook, `requirements.txt` and `.gitignore`. The original experiments, modelling choices and interpretations are all mine, and every number comes from the project's notebook or is computed from the forecasts it exports.
+Claude (Anthropic) was used to explain methods, give suggestions, debug code (for example early stopping, the GARCH-anchored hybrid and the final formatted test cell in the notebook), review results, build the project website, and, after a review, write the check cells at the end of the notebook, `requirements.txt` and `.gitignore`. The original experiments, modelling choices and interpretations are all mine, and every number comes from the project's notebook or is computed from the forecasts it exports.

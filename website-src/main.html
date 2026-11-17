@@ -17,14 +17,14 @@
   <h2 class="sc">In plain words</h2>
   <p class="plain">Prices on the stock market swing more in some weeks than in others, and banks and investors need to know how big next week's swings will be. This project trained computer models on more than 30 years of S&amp;P 500 prices and tested them once on 2023–2026, years they had never seen. The best one scored 20% better than the standard finance model, mostly because it was given the VIX "fear index", but it still forecast too low when sudden shocks like April 2025 hit.</p>
   <h2 class="sc">Abstract</h2>
-  <p>This project asks whether machine-learning models forecast the next five days of S&amp;P 500 volatility better than GARCH(1,1), the standard model from finance. Every choice was made on 2019–2022, and every model was scored once on 2023–2026. XGBoost trained directly on the QLIKE loss scored <b>0.308</b> against GARCH's 0.384, a 20% reduction that matches its validation edge (0.81× GARCH). Most of the gain came from one input, the VIX index: plain linear HAR given the same inputs (the range and VIX) came within 0.034. VIX helped most on nervous days, not in crashes, and the winning model has a hard ceiling of 4.2% a day, less than half the 2020 peak.</p>
+  <p>This project asks whether machine-learning models forecast the next five days of S&amp;P 500 volatility better than GARCH(1,1), the standard model from finance. Every choice was made on 2019–2022, and every model was scored once on 2023–2026. XGBoost trained directly on the QLIKE loss scored <b>0.308</b> against GARCH's 0.384, a 20% reduction that matches its validation edge (0.81× GARCH). Most of the gain came from one input, the VIX index: plain linear HAR given the same inputs (the range and VIX) came within 0.034, and a straight-line fit on VIX alone beat GARCH (0.3465 vs 0.3841). VIX helped most on nervous days, not in crashes, and the winning model has a hard ceiling of 4.2% a day, less than half the 2020 peak.</p>
   <!--@abstract_table-->
   <p class="cap tab">Test scores on 2023 to September 2026, lower is better (QLIKE is the primary metric, defined in §5.2). The full table with all nine models is in §6.2, and the explorer in §6.1 recalculates it for any date range.</p>
 </div>
 <aside class="side findings">
   <h2 class="sc">Main findings</h2>
   <ol>
-    <li><b>Information beat model complexity.</b> Linear HAR given the same inputs (the range and VIX) scored 0.42 on validation, level with the forest and XGBoost (0.416). <a href="#info">§6.3</a></li>
+    <li><b>Information beat model complexity.</b> Linear HAR given the same inputs (the range and VIX) scored 0.43 on validation, close to the forest and XGBoost (0.416). VIX alone, fitted with a straight line, beat GARCH. <a href="#info">§6.3</a></li>
     <li><b>Train on the metric you are judged by.</b> Changing only XGBoost's loss moved it from HAR's side of the table to GARCH's. <a href="#own-metric">§4.6</a></li>
     <li><b>VIX helped on nervous days, not in the crash.</b> Over February to May 2020 it made no difference. <a href="#vix">§6.4</a></li>
     <li><b>Tree models have a ceiling.</b> The final model can never forecast above 4.2% a day. <a href="#ceiling">§7.3</a></li>
@@ -151,7 +151,7 @@
       <tr><td>XGBoost</td><td class="l">Squared-error loss, early stopping</td><td>0.516</td><td class="l"><span class="tag kept">Kept</span> Depth 1 best</td></tr>
       <tr><td>XGBoost-QLIKE</td><td class="l">Same model, trained on the QLIKE loss</td><td>0.497</td><td class="l"><span class="tag kept">Kept</span> Level with GARCH from the loss alone</td></tr>
       <tr><td>+ range</td><td class="l">1-day high–low range added</td><td>0.458</td><td class="l"><span class="tag kept">Kept</span> First model ahead of GARCH</td></tr>
-      <tr><td>+ VIX</td><td class="l">The market's own forecast added</td><td>0.400</td><td class="l"><span class="tag kept">Kept</span> linear HAR given the same inputs reaches 0.42</td></tr>
+      <tr><td>+ VIX</td><td class="l">The market's own forecast added</td><td>0.400</td><td class="l"><span class="tag kept">Kept</span> linear HAR given the same inputs reaches 0.43</td></tr>
       <tr><td>Hybrid</td><td class="l">XGBoost-QLIKE starting from GARCH's forecast</td><td>0.435</td><td class="l"><span class="tag rej">Rejected</span> Never beat plain XGBoost-QLIKE</td></tr>
       <tr><td>Test</td><td class="l">Every model refitted on 1990–2022, scored once</td><td>0.308</td><td class="l"><span class="tag fin">Final</span> Against GARCH's 0.384</td></tr>
       </tbody>
@@ -168,9 +168,10 @@
       <tr><td><span class="sw" style="background:var(--s8)"></span>Rolling</td><td class="l">Volatility of the past 22 days</td><td>0.631</td></tr>
       <tr><td><span class="sw" style="background:var(--s7)"></span>EWMA</td><td class="l">Running variance, recent days weighted more (λ = 0.94, RiskMetrics)</td><td>0.556</td></tr>
       <tr><td><span class="sw" style="background:var(--s2)"></span>GARCH(1,1)</td><td class="l">ω + α·<i>r</i>² + β·σ²: EWMA plus a long-run anchor, 3 numbers fitted on training data</td><td>0.494</td></tr>
+      <tr><td><span class="sw" style="background:var(--ink-3)"></span>VIX alone</td><td class="l">Straight-line fit of the target on VIX, 2 numbers fitted on training data (added after the test run, at a reviewer's suggestion; §6.3)</td><td>0.435</td></tr>
       </tbody>
     </table>
-    <p class="cap tab">The four baselines and their validation QLIKE.</p>
+    <p class="cap tab">The baselines and their validation QLIKE.</p>
     <p><strong>How they behaved in 2020.</strong> Every baseline rose only after the spike began, which also confirms there is no look-ahead. GARCH peaked at 0.060 on 16 March, five days after the actual peak of 0.090, then decayed smoothly. Rolling stayed high for a month, then dropped when the crash days left its window. Naive was the actual line shifted a week later. GARCH was the strongest baseline, so it is the benchmark every ML model has to beat.<sup class="sn">5</sup></p>
   </div>
   <aside class="side note"><span class="k">5</span><b>Why naive looks good on a chart but scores worst.</b> On a four-year chart, a one-week shift looks like overlap, but the errors pile up at turning points. With weekly volatility 1, 1, 6, 3, 2, naive forecasts 1, 1, 1, 6, 3: it predicts calm in the crash week. That one week scores about 31 on QLIKE, while every other week scores under 1.</aside>
@@ -178,10 +179,10 @@
   <div class="main">
     <h3 class="sub"><span class="n">4.2</span>HAR: linear regression on past volatility</h3>
     <table class="bk">
-      <thead><tr><th>Term (fit on 7,285 training days)</th><th>Weight</th><th>p-value</th></tr></thead>
+      <thead><tr><th>Term (fit on 7,280 training days)</th><th>Weight</th><th>p-value</th></tr></thead>
       <tbody>
       <tr><td>Constant</td><td>0.0014</td><td>0.000</td></tr>
-      <tr><td>Today's move</td><td>0.0014</td><td>0.866</td></tr>
+      <tr><td>Today's move</td><td>0.0014</td><td>0.902</td></tr>
       <tr><td>Past 5-day volatility</td><td>0.338</td><td>0.000</td></tr>
       <tr><td>Past 22-day volatility</td><td>0.479</td><td>0.000</td></tr>
       </tbody>
@@ -258,7 +259,10 @@
   <div class="main">
     <h3 class="sub"><span class="n">5.1</span>The split</h3>
     <p>The split is by date and never shuffled. Each part contains a stress episode, so models are fitted, tuned and tested on both calm and turbulent markets. Features and targets are computed on the full series first, then sliced, so no period loses rows to warm-up windows.<sup class="sn">8</sup></p>
-    <p><strong>Two things to know about the test run.</strong> Two planned checks were skipped before freezing the setup: the trees without the range feature, and a depth recheck on the final features. And the split leaves no gap between periods, so the last 5 training rows of each fit have targets that use the first days of the next period: 5 rows out of about 8,000.</p>
+    <p><strong>Two things to know about the test run.</strong> Two planned checks were skipped before freezing the setup: the trees without the range feature, and a depth recheck on the final features. And the split leaves no gap between periods, so the last 5 training rows of each fit have targets that use the first days of the next period: 5 rows out of about 8,000. A check added after the test run dropped those rows and refitted: validation scores moved by at most 0.0003 and test scores by at most 0.0003, so the overlap changes nothing.</p>
+    <p><strong>Is the edge tied to one split?</strong> As a second check, each validation year was forecast by models refitted on all data before it (walk-forward, with the same 5-row purge). XGBoost with the QLIKE loss beat GARCH in every year, by 12–28%, and it was the only model that did: linear HAR + range + VIX lost to GARCH in 2020 and 2022, and the forest and squared-error XGBoost lost in 2022.</p>
+    <div class="table-scroll"><table class="bk heat" id="wf-table"><!--@wf_table--></table></div>
+    <p class="cap tab">Walk-forward QLIKE on the validation years: each year scored by models fitted only on earlier years. Shading compares each cell with GARCH in the same row; the best score in each row is in bold.</p>
   </div>
   <aside class="side note"><span class="k">8</span><b>Why the test set is used only once.</b> If ten people each flip a coin 20 times, the one with 14 heads is lucky, not skilled. Five equally good models also score slightly differently by luck. Picking the best one on the test set and reporting its score overstates it, because it was chosen partly for its luck. Any choice made by looking at test results turns the test set into a second validation set.</aside>
   <div class="main">
@@ -322,16 +326,20 @@
     <h3 class="sub" id="info"><span class="n">6.3</span>Model or information?</h3>
     <p>To separate the two, VIX was also given to plain linear HAR. If the trees won because they are smarter, HAR should stay behind; if they won because of what they were told, HAR should catch up.</p>
     <table class="bk narrow">
-      <thead><tr><th>HAR's inputs</th><th>Val QLIKE</th></tr></thead>
+      <thead><tr><th>Linear model's inputs</th><th>Val QLIKE</th></tr></thead>
       <tbody>
-      <tr><td>3 HAR inputs</td><td>0.545</td></tr>
-      <tr><td>+ 1-day range</td><td>0.52</td></tr>
-      <tr><td>+ VIX</td><td>0.42</td></tr>
-      <tr><td>+ VIX + 1-day range</td><td>0.42</td></tr>
+      <tr><td>3 HAR inputs</td><td>0.5453</td></tr>
+      <tr><td>+ 1-day range</td><td>0.5285</td></tr>
+      <tr><td>+ VIX</td><td>0.4275</td></tr>
+      <tr><td>+ VIX + 1-day range</td><td>0.4265</td></tr>
+      <tr><td>VIX alone, straight-line fit</td><td>0.4350</td></tr>
+      <tr><td>VIX alone, as it is</td><td>0.5066</td></tr>
+      <tr class="off"><td>GARCH(1,1), for reference</td><td>0.4935</td></tr>
       </tbody>
     </table>
-    <p class="cap tab">Linear HAR with the new inputs, on validation.</p>
-    <p>HAR caught up: 0.42, against 0.416 for the forest and plain XGBoost, all three trained on squared error. Most of the improvement over GARCH came from the information in VIX, and the QLIKE loss added about 0.02 on top. The range helped HAR on its own (0.545 → 0.52) but added nothing once VIX was in: for a linear model the two carry largely the same signal.</p>
+    <p class="cap tab">Linear models with the new inputs, on validation. The VIX-alone rows were added after the test run as an extra baseline.</p>
+    <p>HAR caught up to 0.43, against 0.416 for the forest and plain XGBoost, all three trained on squared error. Most of the improvement over GARCH came from the information in VIX, and the QLIKE loss added about 0.02 on top. The range helped HAR on its own (0.545 → 0.529) but added almost nothing once VIX was in (0.4275 → 0.4265): for a linear model the two carry largely the same signal.</p>
+    <p><strong>VIX on its own.</strong> A straight line fitted from VIX to the target, with no other input, scores 0.435 on validation and 0.3465 on test, beating GARCH on both (0.494 and 0.384). Raw VIX, used as it is, scores 0.507 and 0.425 and loses to GARCH: VIX tends to run above the volatility that follows, and the fitted line scales it down. So a single, well-scaled number already beats the standard finance model. XGBoost with the QLIKE loss still beats that line on test, by 0.038 (95% interval 0.011 to 0.075).</p>
   </div>
   <figure class="panel">
     <div class="bars" id="val-bars"><!--@val_bars--></div>
@@ -407,8 +415,8 @@
       <li><strong>The target is an estimate.</strong> Five daily returns give a noisy measure of volatility; intraday data would be more precise but was not freely available for the full history.</li>
       <li><strong>Few crises to learn from,</strong> and overlapping targets mean fewer independent observations than rows (HAR's Durbin-Watson statistic is 0.44).</li>
       <li><strong>Backward-looking inputs lag unscheduled shocks.</strong> No model here anticipated 2 April 2025.</li>
-      <li><strong>Small margins between ML models.</strong> 0.308 vs 0.323 has not been tested for significance.</li>
-      <li><strong>Final fit hit the tree limit.</strong> On validation (fit on 1990–2018), early stopping chose 771 trees. On the 1990–2022 refit it never triggered (1,998 of 2,000 trees), so the test model is not exactly the validated one. It was not rerun, because the test set had been used.</li>
+      <li><strong>Small margins between ML models.</strong> A block bootstrap puts the 0.014 gap to the forest at −0.003 to 0.033, so it may be luck (§6.2).</li>
+      <li><strong>Final fit hit the tree limit.</strong> On validation (fit on 1990–2018), early stopping chose 771 trees. On the 1990–2022 refit it never triggered (1,998 of 2,000 trees), so the test model is not exactly the validated one. It was not rerun, because the test set had been used. A labelled check afterwards capped the refit at the validated 772 trees: it scores 0.310 (0.81× GARCH), so the conclusion does not depend on it.</li>
       <li><strong>GARCH(1,1) treats rises and falls alike,</strong> although falls tend to raise volatility more; richer GARCH variants were out of scope.</li>
       <li><strong>Forecasting volatility is not a trading strategy.</strong> Features predict volatility without causing it, and the reasons given for differences between models are explanations backed by tests, not proofs.</li>
     </ul>

@@ -104,7 +104,20 @@ def reading(lo):
 for k, (m, lo, hi) in CI.items():
     h += (f'<tr><td>{sw(COL[k])}{LAB[k]}</td><td>{fm(m)}</td><td style="white-space:nowrap">{fm(lo)} to {fm(hi)}</td>'
           f'<td class="l">{reading(lo)}</td></tr>')
-print({k: [round(x, 5) for x in v] for k, v in CI.items()})
+# VIX on its own is not in the exported CSV: these two rows are copied from the notebook's bootstrap cell
+for l, (m, lo, hi) in [("VIX alone, straight-line fit", (0.038, 0.011, 0.075)), ("VIX alone, raw", (0.117, 0.046, 0.175))]:
+    h += (f'<tr><td>{sw("--ink-3")}{l}</td><td>{fm(m)}</td><td style="white-space:nowrap">{fm(lo)} to {fm(hi)}</td>'
+          f'<td class="l">{reading(lo)}</td></tr>')
+
+# walk-forward on the validation years (notebook check cell; refit on all earlier years, 5-row purge)
+WF = {2019: [0.488, 0.327, 0.349, 0.360, 0.351], 2020: [0.719, 0.746, 0.680, 0.673, 0.626],
+      2021: [0.512, 0.380, 0.390, 0.370, 0.399], 2022: [0.248, 0.260, 0.259, 0.268, 0.218]}
+WK = ["GARCH", "HAR + VIX", "Random forest", "XGBoost", "XGBoost-QLIKE"]
+SHORT = {"GARCH": "GARCH", "HAR + VIX": "HAR + range + VIX", "Random forest": "Forest", "XGBoost": "XGBoost, sq. error", "XGBoost-QLIKE": "XGBoost, QLIKE"}
+hw = "<thead><tr><th>Year</th>" + "".join(f"<th>{SHORT[k]}</th>" for k in WK) + "<th>QLIKE model ×&nbsp;GARCH</th></tr></thead><tbody>"
+for yr, vs in WF.items():
+    hw += f"<tr><td>{yr}</td>" + "".join(f"<td{heat(v, vs[0], v == min(vs))}>{v:.3f}</td>" for v in vs) + f"<td>{vs[4] / vs[0]:.2f}</td></tr>"
+out["wf_table"] = hw + "</tbody>"
 out["ci_table"] = h + "</tbody>"
 out["ci_note"] = (f"The gap to GARCH is {f3(CI['GARCH'][0])}, and even the low end of its interval ({f3(CI['GARCH'][1])}) is well above zero, so that win is real. "
                   f"The gap to the forest ({fm(CI['Random forest'][0])}, interval {fm(CI['Random forest'][1])} to {fm(CI['Random forest'][2])}) "
@@ -129,9 +142,10 @@ out["range_table"] = h + "</tbody>"
 
 # validation bars (from the notebook's validation runs)
 VB = [("XGBoost (QLIKE loss)", "HAR inputs + range + VIX · chosen", 0.400, True), ("Random forest", "HAR inputs + range + VIX", 0.416, False),
-      ("XGBoost (squared error)", "HAR inputs + range + VIX", 0.416, False), ("HAR + range + VIX", "Linear, same inputs", 0.42, False),
+      ("XGBoost (squared error)", "HAR inputs + range + VIX", 0.416, False), ("HAR + range + VIX", "Linear, same inputs", 0.4265, False),
+      ("VIX alone", "Straight-line fit, added after review", 0.435, False),
       ("XGBoost (QLIKE loss)", "HAR inputs + range", 0.458, False), ("GARCH(1,1)", "Baseline", 0.494, False),
-      ("XGBoost (QLIKE loss)", "HAR inputs only", 0.497, False), ("XGBoost (squared error)", "HAR inputs only", 0.516, False),
+      ("XGBoost (QLIKE loss)", "HAR inputs only", 0.497, False), ("VIX alone", "Raw, no fitting", 0.507, False), ("XGBoost (squared error)", "HAR inputs only", 0.516, False),
       ("HAR", "HAR inputs only", 0.545, False), ("Random forest", "HAR inputs only", 0.547, False), ("EWMA", "Baseline", 0.556, False),
       ("Rolling (22-day)", "Baseline", 0.631, False)]
 mx, ref = 0.68, 0.494
